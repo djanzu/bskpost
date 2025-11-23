@@ -46,6 +46,20 @@ BSK_APP_PASS=your-app-password-here
 ./target/release/bskpost "Hello, Bluesky from CLI!"
 ```
 
+または、標準入力からテキストを渡すことも可能です（パイプやリダイレクトを使用する場合）。
+
+```bash
+echo "Hello from stdin" | ./target/release/bskpost -
+# または
+cat post.txt | ./target/release/bskpost -
+```
+
+`--` を使用してオプションの終わりを明示することもできます。
+
+```bash
+./target/release/bskpost -- -
+```
+
 ### 実行例
 
 ```bash
