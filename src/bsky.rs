@@ -34,18 +34,18 @@ impl BskyClient {
             })
             .send()
             .await
-            .context("Failed to send auth request")?;
+            .context("認証リクエストの送信に失敗しました")?;
 
         if !resp.status().is_success() {
             let status = resp.status();
             let text = resp.text().await.unwrap_or_default();
-            anyhow::bail!("Authentication failed: {} - {}", status, text);
+            anyhow::bail!("認証に失敗しました: {} - {}", status, text);
         }
 
         let auth_data: AuthResponse = resp
             .json()
             .await
-            .context("Failed to parse auth response")?;
+            .context("認証レスポンスの解析に失敗しました")?;
 
         Ok(Self {
             client,
@@ -73,12 +73,12 @@ impl BskyClient {
             .json(&payload)
             .send()
             .await
-            .context("Failed to send create record request")?;
+            .context("投稿リクエストの送信に失敗しました")?;
 
         if !resp.status().is_success() {
             let status = resp.status();
             let text = resp.text().await.unwrap_or_default();
-            anyhow::bail!("Failed to create post: {} - {}", status, text);
+            anyhow::bail!("投稿の作成に失敗しました: {} - {}", status, text);
         }
 
         Ok(())

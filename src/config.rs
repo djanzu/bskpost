@@ -1,55 +1,39 @@
-mod bsky;
-mod config;
+use anyhow::{Context, Result, bail};
+use std::fs;
 
-use anyhow::{Result, bail}; // bailマクロを追加
-use clap::Parser;
-use crate::bsky::BskyClient;
-use crate::config::load_config;
-
-// Blueskyの文字数制限（目安）
-const MAX_CHARS: usize = 300;
-
-#[derive(Parser, Debug)]
-#[command(author, version, about, long_about = None)]
-struct Args {
-    /// The text content of the post
-    #[arg(index = 1)]
-    text: String,
+pub struct Config {
+    pub handle: String,
+    pub app_pass: String,
 }
 
-#[tokio::main]
-async fn main() -> Result<()> {
-    let args = Args::parse();
-    
-    // --- 追加したバリデーション（検証）ロジック ---
+pub fn load_config() -> Result<Config> {
+    let home_dir = dirs::home_dir().context("ホームディレクトリが見つかりませんでした")?;
+    let config_path = home_dir.join(".bskenv");
 
-    // 1. 空文字または空白のみのチェック
-    if args.text.trim().is_empty() {
-        bail!("エラー: 投稿内容が空です。テキストを入力してください。");
+    if !config_path.exists() {
+        bail!("設定ファイルが見つかりません: {:?}", config_path);
     }
 
-    // 2. 文字数カウント（Unicode文字数としてカウント）
-    let char_count = args.text.chars().count();
-    if char_count > MAX_CHARS {
-        bail!(
-            "エラー: 文字数が制限を超えています。現在の文字数: {} (上限: {})", 
-            char_count, 
-            MAX_CHARS
-        );
+    let content = fs::read_to_string(&config_path)
+        .context(".bskenvファイルの読み込みに失敗しました")?;
+
+    let mut handle = None;
+    let mut app_pass = None;
+
+    for line in content.lines() {
+        if let Some((key, value)) = line.split_once('=') {
+            let key = key.trim();
+            let value = value.trim();
+            match key {
+                "BSK_HANDLE" => handle = Some(value.to_string()),
+                "BSK_APP_PASS" => app_pass = Some(value.to_string()),
+                _ => {}
+            }
+        }
     }
 
-    // -------------------------------------------
-    
-    // Load configuration
-    let config = load_config()?;
-    
-    println!("Authenticating as {}...", config.handle);
-    let client = BskyClient::authenticate(&config.handle, &config.app_pass).await?;
-    
-    println!("Posting message...");
-    client.create_post(&args.text).await?;
-    
-    println!("Successfully posted to Bluesky!");
-    
-    Ok(())
+    let handle = handle.context(".bskenvにBSK_HANDLEが見つかりません")?;
+    let app_pass = app_pass.context(".bskenvにBSK_APP_PASSが見つかりません")?;
+
+    Ok(Config { handle, app_pass })
 }
