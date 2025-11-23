@@ -1,39 +1,55 @@
-use anyhow::{Context, Result};
-use std::fs::File;
-use std::io::{BufRead, BufReader};
+mod bsky;
+mod config;
 
+use anyhow::{Result, bail}; // bailマクロを追加
+use clap::Parser;
+use crate::bsky::BskyClient;
+use crate::config::load_config;
 
-pub struct Config {
-    pub handle: String,
-    pub app_pass: String,
+// Blueskyの文字数制限（目安）
+const MAX_CHARS: usize = 300;
+
+#[derive(Parser, Debug)]
+#[command(author, version, about, long_about = None)]
+struct Args {
+    /// The text content of the post
+    #[arg(index = 1)]
+    text: String,
 }
 
-pub fn load_config() -> Result<Config> {
-    let home_dir = dirs::home_dir().context("Could not find home directory")?;
-    let config_path = home_dir.join(".bskenv");
+#[tokio::main]
+async fn main() -> Result<()> {
+    let args = Args::parse();
+    
+    // --- 追加したバリデーション（検証）ロジック ---
 
-    let file = File::open(&config_path)
-        .with_context(|| format!("Could not open config file at {:?}", config_path))?;
-    let reader = BufReader::new(file);
-
-    let mut handle = None;
-    let mut app_pass = None;
-
-    for line in reader.lines() {
-        let line = line?;
-        if let Some((key, value)) = line.split_once('=') {
-            let key = key.trim();
-            let value = value.trim().to_string();
-            match key {
-                "BSK_HANDLE" => handle = Some(value),
-                "BSK_APP_PASS" => app_pass = Some(value),
-                _ => {}
-            }
-        }
+    // 1. 空文字または空白のみのチェック
+    if args.text.trim().is_empty() {
+        bail!("エラー: 投稿内容が空です。テキストを入力してください。");
     }
 
-    Ok(Config {
-        handle: handle.context("BSK_HANDLE not found in .bskenv")?,
-        app_pass: app_pass.context("BSK_APP_PASS not found in .bskenv")?,
-    })
+    // 2. 文字数カウント（Unicode文字数としてカウント）
+    let char_count = args.text.chars().count();
+    if char_count > MAX_CHARS {
+        bail!(
+            "エラー: 文字数が制限を超えています。現在の文字数: {} (上限: {})", 
+            char_count, 
+            MAX_CHARS
+        );
+    }
+
+    // -------------------------------------------
+    
+    // Load configuration
+    let config = load_config()?;
+    
+    println!("Authenticating as {}...", config.handle);
+    let client = BskyClient::authenticate(&config.handle, &config.app_pass).await?;
+    
+    println!("Posting message...");
+    client.create_post(&args.text).await?;
+    
+    println!("Successfully posted to Bluesky!");
+    
+    Ok(())
 }
